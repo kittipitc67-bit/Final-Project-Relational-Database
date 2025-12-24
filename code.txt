@@ -1,0 +1,94 @@
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+import sqlite3
+
+app = FastAPI()
+DB_PATH = "gamedee.db"
+
+class PlayerCreate(BaseModel):
+    Player_Name: str
+    level: int = 1
+    exp: int = 0
+    Gold: int = 0
+
+class ItemCreate(BaseModel):
+    Item_Name: str
+    Item_Price: int
+    description: str = ""
+    quantity: int = 1
+    rarity: str = "Common"
+
+class inventoryCreate(BaseModel):
+    Player_ID: int
+    Item_ID: int
+    Quantity: int
+
+def get_db_connection():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+@app.get("/players")
+def get_players():
+    conn = get_db_connection()
+    players = conn.execute("SELECT * FROM Player").fetchall()
+    conn.close()
+    return {"status": "success", "data": [dict(row) for row in players]}
+
+@app.post("/players")
+def create_player(player: PlayerCreate):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO Player (Player_Name, level, exp, Gold) VALUES (?, ?, ?, ?)",
+        (player.Player_Name, player.level, player.exp, player.Gold)
+    )
+    conn.commit()
+    new_id = cursor.lastrowid
+    conn.close()
+    return {"status": "created", "player_id": new_id, "message": "Player added successfully"}
+
+@app.post("/items")
+def create_item(item: ItemCreate):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO Items (Item_Name, Item_Price, description, quantity, rarity) VALUES (?, ?, ?, ?, ?)",
+        (item.Item_Name, item.Item_Price, item.description, item.quantity, item.rarity)
+    )
+    conn.commit()
+    new_id = cursor.lastrowid
+    conn.close()
+    return {"status": "created", "item_id": new_id, "message": "Item added successfully"}
+
+@app.get("/items")
+def read_items():
+    conn = get_db_connection()
+    items = conn.execute("SELECT * FROM Items").fetchall()
+    conn.close()
+    return {"status": "success", "data": [dict(row) for row in items]}
+@app.get("/inventory")
+def get_inventory():
+    conn = get_db_connection()
+    query = """
+        SELECT Player.Player_Name, Items.Item_Name, Inventory.Quantity 
+        FROM Inventory 
+        JOIN Items ON Inventory.Item_ID = Items.Item_ID 
+        JOIN Player ON Inventory.Player_ID = Player.Player_ID;
+    """
+    rows = conn.execute(query).fetchall()
+    conn.close()
+    return {"status": "success", "data": [dict(row) for row in rows]}
+
+@app.post("/inventory")
+def create_inventory(inventory: inventoryCreate):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO Inventory (Player_ID, Item_ID, Quantity) VALUES (?, ?, ?)",
+        (inventory.Player_ID, inventory.Item_ID, inventory.Quantity)
+    )
+    conn.commit()
+    new_id = cursor.lastrowid
+    conn.close()
+    return {"status": "created", "inventory_id": new_id, "message": "Inventory added successfully"}
